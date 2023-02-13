@@ -6,18 +6,18 @@ object Obfuscation {
             private const val _base = Constants.GRINDR_PKG + ".base"
 
             object Experiment {
-                private const val _experiment = "$_base.experiment"
+                private const val _experiment = "$_base.f"
 
-                const val IExperimentsManager = "$_experiment.c"
+                const val IExperimentsManager = "$_experiment.b"
             }
         }
 
         object experiment {
-            private const val _experiment = Constants.GRINDR_PKG + ".experiment"
+            private const val _experiment = Constants.GRINDR_PKG + ".j"
 
-            const val Experiments = "$_experiment.a"
+            const val Experiments = "$_experiment.b"
             object Experiments_ {
-                const val uncheckedIsEnabled_expMgr = "c"
+                const val uncheckedIsEnabled_expMgr = "a"
             }
         }
 
@@ -38,6 +38,7 @@ object Obfuscation {
             const val Feature = "$_model.Feature"
             object Feature_ {
                 const val isGranted = "isGranted"
+                const val isNotGranted = "isNotGranted"
             }
         }
 
@@ -66,28 +67,29 @@ object Obfuscation {
         }
 
         object R {
-            private const val _R = Constants.GRINDR_PKG
+            private const val _R = Constants.GRINDR_PKG + ".o"
 
-            const val color = "$_R.h0"
+            const val color = "$_R\$d"
             object color_ {
-                const val grindr_gold_star_gay = "y"
-                const val grindr_pure_white = "P"
+                const val grindr_gold_star_gay = "x"
+                const val grindr_pure_white = "M"
             }
         }
 
         object storage {
             private const val _storage = Constants.GRINDR_PKG + ".storage"
 
-            const val UserSession = "$_storage.v0"
-            const val UserSession2 = "$_storage.w0"
+            const val UserSession = "$_storage.ai"
+            const val UserSession2 = "$_storage.aj"
 
             const val IUserSession = "$_storage.IUserSession"
             object IUserSession_ {
                 const val hasFeature_feature = "a"
-                const val isFree = "i"
-                const val isNoXtraUpsell = "o"
-                const val isXtra = "f"
-                const val isUnlimited = "p"
+                const val isFree = "j"
+                const val isNoXtraUpsell = "k"
+                const val isXtra = "l"
+                const val isUnlimited = "m"
+                const val isSubscriber = "n"
             }
         }
 
@@ -99,7 +101,7 @@ object Obfuscation {
 
                 const val ProfileFieldsView = "$_profileV2.ProfileFieldsView"
                 object ProfileFieldsView_ {
-                    const val setProfile = "h"
+                    const val setProfile = "setProfile"
                 }
             }
         }
@@ -107,7 +109,7 @@ object Obfuscation {
         object utils {
             private const val _utils = Constants.GRINDR_PKG + ".utils"
 
-            const val ProfileUtils = "$_utils.t0"
+            const val ProfileUtils = "$_utils.as"
             object ProfileUtils_ {
                 const val onlineIndicatorDuration = "b"
             }
@@ -116,19 +118,18 @@ object Obfuscation {
         object view {
             private const val _view = Constants.GRINDR_PKG + ".view"
 
-            const val ExtendedProfileFieldView = "$_view.k4"
+            const val ExtendedProfileFieldView = "$_view.bv"
             object ExtendedProfileFieldView_ {
-                const val setLabel = "l"
-                const val setValue = "n"
+                const val setLabel = "a"
+                const val setValue = "b"
             }
 
             const val TapsAnimLayout = "$_view.TapsAnimLayout"
             object TapsAnimLayout_ {
-                const val tapType = "i"
+                const val tapType = "g"
 
                 const val getCanSelectVariants = "getCanSelectVariants"
-                const val getDisableVariantSelection = "getDisableVariantSelection"
-                const val setTapType = "S"
+                const val setTapType = "a"
             }
         }
     }

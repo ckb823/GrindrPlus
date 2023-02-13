@@ -1,26 +1,16 @@
 package com.eljaviluki.grindrplus
 
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
-import android.os.Build
-import android.util.AttributeSet
 import android.view.View
 import android.view.Window
-import de.robv.android.xposed.XC_MethodHook
 import android.view.WindowManager
-import android.widget.FrameLayout
-import android.widget.Toast
 import androidx.core.content.ContextCompat
-import com.eljaviluki.grindrplus.Constants.Returns.RETURN_TRUE
 import com.eljaviluki.grindrplus.Constants.Returns.RETURN_FALSE
 import com.eljaviluki.grindrplus.Constants.Returns.RETURN_INTEGER_MAX_VALUE
 import com.eljaviluki.grindrplus.Constants.Returns.RETURN_LONG_MAX_VALUE
+import com.eljaviluki.grindrplus.Constants.Returns.RETURN_TRUE
 import com.eljaviluki.grindrplus.Obfuscation.GApp
 import com.eljaviluki.grindrplus.decorated.persistence.model.Profile
-import de.robv.android.xposed.XC_MethodReplacement
-import de.robv.android.xposed.XposedBridge
-import de.robv.android.xposed.XposedHelpers
+import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.XposedHelpers.*
 import kotlin.time.Duration
 
@@ -72,24 +62,10 @@ object Hooks {
             Hooker.pkgParam.classLoader
         )
 
-        val class_Continuation = findClass(
-            "kotlin.coroutines.Continuation",
-            Hooker.pkgParam.classLoader
-        ) //I tried using Continuation::class.java, but that only gives a different Class instance (does not work)
-
-
-        val class_Intrinsics = findClass(
-            "kotlin.jvm.internal.Intrinsics",
-            Hooker.pkgParam.classLoader
-        )
-
-        val checkNotNullParameterMethod = findMethodExact(class_Intrinsics, "checkNotNullParameter", Object::class.java, String::class.java)
-
         findAndHookMethod(
             class_ProfileFieldsView,
             GApp.ui.profileV2.ProfileFieldsView_.setProfile,
             class_Profile,
-            class_Continuation,
             object : XC_MethodHook() {
                 var fieldsViewInstance: Any? = null
                 val context: Any? by lazy {
@@ -121,20 +97,12 @@ object Hooks {
                     //Get profile instance in the 1st parameter
                     val profile = Profile(param.args[0])
 
-                    val profileIdField = addProfileFieldUi(
+                    addProfileFieldUi(
                         "Profile ID",
                         profile.profileId,
                         where = 0
-                    ) as FrameLayout
+                    )
 
-                    profileIdField.setOnLongClickListener {
-                        val clipboard = Hooker.appContext.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                        val clip = ClipData.newPlainText("Profile ID", profile.profileId)
-                        clipboard.setPrimaryClip(clip)
-                        Toast.makeText(Hooker.appContext, "Profile ID copied to clipboard", Toast.LENGTH_SHORT).show()
-                        true
-                    }
-                    
                     val lastSeen = profile.seen
                     addProfileFieldUi(
                         "Last Seen",
@@ -157,11 +125,9 @@ object Hooks {
                 }
 
                 //By default, the views are added to the end of the list.
-                private fun addProfileFieldUi(label: CharSequence, value: CharSequence, where: Int = -1) : Any {
-                    val hooked = XposedBridge.hookMethod(checkNotNullParameterMethod, XC_MethodReplacement.DO_NOTHING)
+                private fun addProfileFieldUi(label: CharSequence, value: CharSequence, where: Int = -1) {
                     val extendedProfileFieldView =
-                        newInstance(class_ExtendedProfileFieldView, context, null as AttributeSet?)
-                    hooked.unhook()
+                        newInstance(class_ExtendedProfileFieldView, context)
 
                     callMethod(
                         extendedProfileFieldView,
@@ -191,8 +157,6 @@ object Hooks {
                         extendedProfileFieldView,
                         where
                     )
-
-                    return extendedProfileFieldView
                 }
             })
     }
@@ -251,6 +215,12 @@ object Hooks {
                 GApp.storage.IUserSession_.isUnlimited,
                 RETURN_TRUE
             )
+
+            findAndHookMethod(
+                userSessionImpl,
+                GApp.storage.IUserSession_.isSubscriber,
+                RETURN_TRUE
+            )
         }
     }
 
@@ -289,6 +259,12 @@ object Hooks {
             RETURN_TRUE
         )
 
+        findAndHookMethod(
+            class_Feature,
+            GApp.model.Feature_.isNotGranted,
+            RETURN_FALSE
+        )
+
         val class_IUserSession = findClass(
             GApp.storage.IUserSession,
             Hooker.pkgParam.classLoader
@@ -299,6 +275,13 @@ object Hooks {
             GApp.model.Feature_.isGranted,
             class_IUserSession,
             RETURN_TRUE
+        )
+
+        findAndHookMethod(
+            class_Feature,
+            GApp.model.Feature_.isNotGranted,
+            class_IUserSession,
+            RETURN_FALSE
         )
     }
 
@@ -361,20 +344,12 @@ object Hooks {
             "android.location.Location",
             Hooker.pkgParam.classLoader
         )
-        
+
         findAndHookMethod(
             class_Location,
             "isFromMockProvider",
             RETURN_FALSE
         )
-
-        if(Build.VERSION.SDK_INT >= 31) {
-            findAndHookMethod(
-                class_Location,
-                "isMock",
-                RETURN_FALSE
-            )
-        }
     }
 
 
@@ -433,12 +408,6 @@ object Hooks {
             class_TapsAnimLayout,
             GApp.view.TapsAnimLayout_.getCanSelectVariants,
             RETURN_TRUE
-        )
-
-        findAndHookMethod(
-            class_TapsAnimLayout,
-            GApp.view.TapsAnimLayout_.getDisableVariantSelection,
-            RETURN_FALSE
         )
     }
 
