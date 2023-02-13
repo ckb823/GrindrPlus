@@ -1,16 +1,26 @@
 package com.eljaviluki.grindrplus
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.os.Build
+import android.util.AttributeSet
 import android.view.View
 import android.view.Window
+import de.robv.android.xposed.XC_MethodHook
 import android.view.WindowManager
+import android.widget.FrameLayout
+import android.widget.Toast
 import androidx.core.content.ContextCompat
+import com.eljaviluki.grindrplus.Constants.Returns.RETURN_TRUE
 import com.eljaviluki.grindrplus.Constants.Returns.RETURN_FALSE
 import com.eljaviluki.grindrplus.Constants.Returns.RETURN_INTEGER_MAX_VALUE
 import com.eljaviluki.grindrplus.Constants.Returns.RETURN_LONG_MAX_VALUE
-import com.eljaviluki.grindrplus.Constants.Returns.RETURN_TRUE
+import com.eljaviluki.grindrplus.Constants.Returns.RETURN_ZERO
 import com.eljaviluki.grindrplus.Obfuscation.GApp
 import com.eljaviluki.grindrplus.decorated.persistence.model.Profile
-import de.robv.android.xposed.XC_MethodHook
+import de.robv.android.xposed.XC_MethodReplacement
+import de.robv.android.xposed.XposedBridge
 import de.robv.android.xposed.XposedHelpers.*
 import kotlin.time.Duration
 
@@ -62,10 +72,24 @@ object Hooks {
             Hooker.pkgParam.classLoader
         )
 
+        val class_Continuation = findClass(
+            "kotlin.coroutines.Continuation",
+            Hooker.pkgParam.classLoader
+        ) //I tried using Continuation::class.java, but that only gives a different Class instance (does not work)
+
+
+        val class_Intrinsics = findClass(
+            "kotlin.jvm.internal.Intrinsics",
+            Hooker.pkgParam.classLoader
+        )
+
+        val checkNotNullParameterMethod = findMethodExact(class_Intrinsics, "checkNotNullParameter", Object::class.java, String::class.java)
+
         findAndHookMethod(
             class_ProfileFieldsView,
             GApp.ui.profileV2.ProfileFieldsView_.setProfile,
             class_Profile,
+            class_Continuation,
             object : XC_MethodHook() {
                 var fieldsViewInstance: Any? = null
                 val context: Any? by lazy {
@@ -94,30 +118,22 @@ object Hooks {
                 override fun afterHookedMethod(param: MethodHookParam) {
                     fieldsViewInstance = param.thisObject
 
-                    //Get profile instance in the 1st parameter
-                    val profile = Profile(param.args[0])
+                    param.args[0]?.let {
+                        val profile = Profile(it)
+                        addProfileFieldUi("Profile ID", profile.profileId, 0).also { view ->
+                            view.setOnLongClickListener {
+                                val clipboard = Hooker.appContext.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                val clip = ClipData.newPlainText("Profile ID", profile.profileId)
+                                clipboard.setPrimaryClip(clip)
+                                Toast.makeText(Hooker.appContext, "Profile ID copied to clipboard", Toast.LENGTH_SHORT).show()
+                                true
+                            }
+                        }
 
-                    addProfileFieldUi(
-                        "Profile ID",
-                        profile.profileId,
-                        where = 0
-                    )
+                        addProfileFieldUi("Last Seen", if (profile.seen != 0L) Utils.toReadableDate(profile.seen) else "N/A", 1)
 
-                    val lastSeen = profile.seen
-                    addProfileFieldUi(
-                        "Last Seen",
-                        if (lastSeen != 0L) Utils.toReadableDate(lastSeen) else "N/A",
-                        where = 1
-                    )
-
-                    val weight : Double = profile.weight
-                    val height : Double = profile.height
-                    if(weight != 0.0 && height != 0.0) {
-                        addProfileFieldUi(
-                            "Body Mass Index",
-                            Utils.getBmiDescription(weight, height),
-                            where = 2
-                        )
+                        if (profile.weight != 0.0 && profile.height != 0.0)
+                            addProfileFieldUi("Body Mass Index", Utils.getBmiDescription(profile.weight, profile.height), 2)
                     }
 
                     //.setVisibility() of param.thisObject to always VISIBLE (otherwise if the profile has no fields, the additional ones will not be shown)
@@ -125,9 +141,11 @@ object Hooks {
                 }
 
                 //By default, the views are added to the end of the list.
-                private fun addProfileFieldUi(label: CharSequence, value: CharSequence, where: Int = -1) {
+                private fun addProfileFieldUi(label: CharSequence, value: CharSequence, where: Int = -1) : FrameLayout {
+                    val hooked = XposedBridge.hookMethod(checkNotNullParameterMethod, XC_MethodReplacement.DO_NOTHING)
                     val extendedProfileFieldView =
-                        newInstance(class_ExtendedProfileFieldView, context)
+                        newInstance(class_ExtendedProfileFieldView, context, null as AttributeSet?)
+                    hooked.unhook()
 
                     callMethod(
                         extendedProfileFieldView,
@@ -157,6 +175,8 @@ object Hooks {
                         extendedProfileFieldView,
                         where
                     )
+
+                    return extendedProfileFieldView as FrameLayout
                 }
             })
     }
@@ -180,10 +200,10 @@ object Hooks {
                 Hooker.pkgParam.classLoader
             ),
 
-            findClass(
+            /*findClass(
                 GApp.storage.UserSession2,
                 Hooker.pkgParam.classLoader
-            )
+            )*/
         ).forEach { userSessionImpl ->
             findAndHookMethod(
                 userSessionImpl,
@@ -213,12 +233,6 @@ object Hooks {
             findAndHookMethod(
                 userSessionImpl,
                 GApp.storage.IUserSession_.isUnlimited,
-                RETURN_TRUE
-            )
-
-            findAndHookMethod(
-                userSessionImpl,
-                GApp.storage.IUserSession_.isSubscriber,
                 RETURN_TRUE
             )
         }
@@ -259,12 +273,6 @@ object Hooks {
             RETURN_TRUE
         )
 
-        findAndHookMethod(
-            class_Feature,
-            GApp.model.Feature_.isNotGranted,
-            RETURN_FALSE
-        )
-
         val class_IUserSession = findClass(
             GApp.storage.IUserSession,
             Hooker.pkgParam.classLoader
@@ -277,11 +285,38 @@ object Hooks {
             RETURN_TRUE
         )
 
+        val class_UpsellsV8 = findClass(
+            GApp.model.UpsellsV8,
+            Hooker.pkgParam.classLoader
+        )
+
         findAndHookMethod(
-            class_Feature,
-            GApp.model.Feature_.isNotGranted,
-            class_IUserSession,
-            RETURN_FALSE
+            class_UpsellsV8,
+            GApp.model.UpsellsV8_.getMpuFree,
+            RETURN_INTEGER_MAX_VALUE
+        )
+
+        findAndHookMethod(
+            class_UpsellsV8,
+            GApp.model.UpsellsV8_.getMpuXtra,
+            RETURN_ZERO
+        )
+
+        val class_Inserts = findClass(
+            GApp.model.Inserts,
+            Hooker.pkgParam.classLoader
+        )
+
+        findAndHookMethod(
+            class_Inserts,
+            GApp.model.Inserts_.getMpuFree,
+            RETURN_INTEGER_MAX_VALUE
+        )
+
+        findAndHookMethod(
+            class_Inserts,
+            GApp.model.Inserts_.getMpuXtra,
+            RETURN_ZERO
         )
     }
 
@@ -344,12 +379,20 @@ object Hooks {
             "android.location.Location",
             Hooker.pkgParam.classLoader
         )
-
+        
         findAndHookMethod(
             class_Location,
             "isFromMockProvider",
             RETURN_FALSE
         )
+
+        if(Build.VERSION.SDK_INT >= 31) {
+            findAndHookMethod(
+                class_Location,
+                "isMock",
+                RETURN_FALSE
+            )
+        }
     }
 
 
@@ -409,6 +452,12 @@ object Hooks {
             GApp.view.TapsAnimLayout_.getCanSelectVariants,
             RETURN_TRUE
         )
+
+        findAndHookMethod(
+            class_TapsAnimLayout,
+            GApp.view.TapsAnimLayout_.getDisableVariantSelection,
+            RETURN_FALSE
+        )
     }
 
     /**
@@ -424,5 +473,61 @@ object Hooks {
             GApp.model.ExpiringImageBody_.getDuration,
             RETURN_LONG_MAX_VALUE
         )
+    }
+
+    fun preventRecordProfileViews(){
+        val class_Continuation = findClass(
+            "kotlin.coroutines.Continuation",
+            Hooker.pkgParam.classLoader
+        )
+
+        val class_GrindrRestService = findClass(GApp.api.GrindrRestService, Hooker.pkgParam.classLoader)
+        findAndHookMethod(
+            class_GrindrRestService,
+            GApp.api.GrindrRestService_.recordProfileViews,
+            List::class.java,
+            class_Continuation,
+            XC_MethodReplacement.DO_NOTHING
+        )
+    }
+
+    fun makeMessagesAlwaysRemovable(){
+        val class_ChatBaseFragmentV2 = findClass(
+            GApp.ui.chat.ChatBaseFragmentV2,
+            Hooker.pkgParam.classLoader
+        )
+
+        val class_ChatMessage = findClass(GApp.persistence.model.ChatMessage, Hooker.pkgParam.classLoader)
+        findAndHookMethod(
+            class_ChatBaseFragmentV2,
+            GApp.ui.chat.ChatBaseFragmentV2_._canBeUnsent,
+            class_ChatMessage,
+            RETURN_FALSE
+        )
+    }
+
+    fun notifyBlockStatusViaToast() {
+        val class_BlockByHelper = findClass(
+            GApp.persistence.cache.BlockByHelper,
+            Hooker.pkgParam.classLoader
+        )
+
+        findAndHookMethod(class_BlockByHelper, GApp.persistence.cache.BlockByHelper_.addBlockByProfile, String::class.java, object : XC_MethodHook(){
+            override fun beforeHookedMethod(param: MethodHookParam?) {
+                val profileId: String = param!!.args[0] as String
+                ContextCompat.getMainExecutor(Hooker.appContext).execute {
+                    Toast.makeText(Hooker.appContext, "Profile [ID: $profileId] has blocked your profile.", Toast.LENGTH_LONG).show()
+                }
+            }
+        })
+
+        findAndHookMethod(class_BlockByHelper, GApp.persistence.cache.BlockByHelper_.removeBlockByProfile, String::class.java, object : XC_MethodHook(){
+            override fun beforeHookedMethod(param: MethodHookParam?) {
+                val profileId: String = param!!.args[0] as String
+                ContextCompat.getMainExecutor(Hooker.appContext).execute {
+                    Toast.makeText(Hooker.appContext, "Profile [ID: $profileId] has unblocked your profile.", Toast.LENGTH_LONG).show()
+                }
+            }
+        })
     }
 }
